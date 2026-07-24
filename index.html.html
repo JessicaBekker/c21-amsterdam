@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>C21-kaart Amsterdam — gewichtsborden &amp; 7,5t-zone</title>
+
+<!-- Leaflet (via cdnjs) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+
+<!-- Fonts: Barlow (signage-adjacent) + Space Mono for codes/data -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --applies:#CB1F27;      /* signaalrood — prohibitieve ring, "geldt voor jou" */
+    --applies-soft:#f7dcdd;
+    --exempt:#9AA0A6;       /* gedempt grijs — "vrijgesteld (7,5t-zone)" */
+    --exempt-soft:#eceef0;
+    --asphalt:#1C1E21;      /* inkt / UI-chrome */
+    --asphalt-2:#3b3f45;
+    --concrete:#F4F2EC;     /* paneel-achtergrond */
+    --paper:#FFFFFF;
+    --accent:#F2C300;       /* wegmarkering-geel — actieve staat / focus (spaarzaam) */
+    --line:#DDD9CF;
+    --line-2:#ece8de;
+    --muted:#6b6f76;
+    --shadow:0 8px 30px rgba(20,22,25,.14), 0 2px 8px rgba(20,22,25,.08);
+    font-synthesis:none;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+    color:var(--asphalt);
+    background:var(--concrete);
+    -webkit-font-smoothing:antialiased;
+  }
+  #map{position:absolute;inset:0;background:#e9e7df;z-index:0}
+
+  /* ---------- Control panel ---------- */
+  .panel{
+    position:absolute;top:14px;left:14px;z-index:1000;
+    width:344px;max-width:calc(100vw - 28px);
+    max-height:calc(100vh - 28px);
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:14px;
+    box-shadow:var(--shadow);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .panel__head{
+    padding:15px 16px 13px;
+    border-bottom:1px solid var(--line-2);
+    background:
+      linear-gradient(var(--paper),var(--paper)) padding-box,
+      linear-gradient(90deg,var(--applies) 0 34%, var(--asphalt) 34% 66%, var(--exempt) 66% 100%) border-box;
+    border-top:3px solid transparent;
+    border-radius:14px 14px 0 0;
+  }
+  .eyebrow{
+    font-family:"Space Mono",monospace;font-size:10.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--muted);margin:0 0 3px;
+  }
+  h1{
+    font-family:"Barlow Semi Condensed",sans-serif;font-weight:700;
+    font-size:20px;line-height:1.05;margin:0;letter-spacing:-.01em;
+  }
+  .sub{font-size:12.5px;color:var(--muted);margin:6px 0 0;line-height:1.35}
+  .panel__body{padding:14px 16px 16px;overflow-y:auto;overscroll-behavior:contain}
+
+  .block{margin-bottom:16px}
+  .block:last-child{margin-bottom:2px}
+  .label{
+    font-family:"Space Mono",monospace;font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--asphalt-2);margin:0 0 8px;font-weight:700;
+  }
+
+  /* primary view radio */
+  .views{display:flex;flex-direction:column;gap:6px}
+  .view{
+    display:flex;align-items:center;gap:10px;
+    border:1px solid var(--line);border-radius:9px;
+    padding:9px 11px;cursor:pointer;background:var(--paper);
+    transition:border-color .12s, background .12s;
+    font-size:13.5px;font-weight:500;
+  }
+  .view:hover{border-color:#c9c4b6}
+  .view input{position:absolute;opacity:0;pointer-events:none}
+  .view .dot{
+    width:15px;height:15px;border-radius:50%;border:2px solid #b9b4a6;flex:0 0 auto;position:relative;
+  }
+  .view[data-on="1"]{border-color:var(--asphalt);background:#fbfaf6}
+  .view[data-on="1"] .dot{border-color:var(--asphalt)}
+  .view[data-on="1"] .dot::after{
+    content:"";position:absolute;inset:3px;border-radius:50%;background:var(--accent);
+  }
+  .view .vtxt{display:flex;flex-direction:column;line-height:1.15}
+  .view .vtxt small{font-size:11px;color:var(--muted);font-weight:400;margin-top:2px}
+
+  /* chips */
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{
+    font-family:"Space Mono",monospace;font-size:11.5px;font-weight:700;
+    border:1px solid var(--line);border-radius:20px;padding:5px 11px;cursor:pointer;
+    background:var(--paper);color:var(--asphalt-2);user-select:none;
+    transition:all .12s;display:inline-flex;align-items:center;gap:6px;
+  }
+  .chip:hover{border-color:#c9c4b6}
+  .chip[data-on="1"]{background:var(--asphalt);color:#fff;border-color:var(--asphalt)}
+  .chip[data-on="1"] .cdot{background:var(--accent)}
+  .chip .cdot{width:7px;height:7px;border-radius:50%;background:#c9c4b6}
+  .chip small{font-weight:400;opacity:.7;font-family:"Barlow"}
+
+  /* counts */
+  .counts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px}
+  .count{
+    border:1px solid var(--line-2);border-radius:10px;padding:9px 11px;background:#fbfaf6;
+  }
+  .count b{font-family:"Space Mono",monospace;font-size:19px;display:block;line-height:1}
+  .count span{font-size:11px;color:var(--muted);display:block;margin-top:4px}
+  .count.applies b{color:var(--applies)}
+  .count.exempt b{color:#7d8288}
+  .count.shown{grid-column:1 / -1;background:#fff;border-color:var(--line)}
+  .count.shown b{color:var(--asphalt)}
+
+  /* legend */
+  .legend{display:flex;flex-direction:column;gap:9px}
+  .leg{display:flex;align-items:center;gap:11px;font-size:12.5px}
+  .leg svg{flex:0 0 auto}
+  .leg .zbadge{
+    font-family:"Space Mono",monospace;font-weight:700;font-size:10px;color:#fff;
+    background:var(--asphalt);border-radius:4px;padding:2px 5px;
+  }
+
+  /* data status / loader / dropzone */
+  .status{
+    font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;
+    padding:8px 10px;border:1px dashed var(--line);border-radius:9px;background:#fbfaf6;
+  }
+  .status .spin{
+    width:13px;height:13px;border-radius:50%;border:2px solid #d6d1c4;border-top-color:var(--asphalt);
+    animation:spin .8s linear infinite;flex:0 0 auto;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .status.err{color:#8a2d2d;border-color:#e2b9b9;background:#fbf2f2;border-style:solid}
+  .status.ok{color:#2f6b3f;border-color:#bfe0c6;background:#f2f9f3;border-style:solid}
+
+  .dropcard{border:1px solid var(--line);border-radius:11px;padding:14px;background:#fff}
+  .dropzone{
+    border:2px dashed #cfcabb;border-radius:10px;padding:18px 12px;text-align:center;
+    cursor:pointer;transition:all .14s;background:#fbfaf6;
+  }
+  .dropzone:hover,.dropzone.drag{border-color:var(--asphalt);background:#f6f4ee}
+  .dropzone strong{display:block;font-size:13.5px;margin-bottom:3px}
+  .dropzone small{font-size:11.5px;color:var(--muted)}
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;justify-content:center;width:100%;
+    margin-top:10px;padding:9px 12px;border-radius:9px;border:1px solid var(--asphalt);
+    background:var(--asphalt);color:#fff;font-family:"Barlow";font-size:13px;font-weight:600;
+    text-decoration:none;cursor:pointer;transition:opacity .12s;
+  }
+  .btn:hover{opacity:.9}
+  .btn.ghost{background:#fff;color:var(--asphalt)}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:9px;line-height:1.4}
+  .hint a{color:var(--asphalt-2)}
+
+  details.about{margin-top:4px;font-size:12px;color:var(--muted)}
+  details.about summary{cursor:pointer;font-family:"Space Mono",monospace;font-size:10.5px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--asphalt-2);font-weight:700;list-style:none}
+  details.about summary::-webkit-details-marker{display:none}
+  details.about summary::before{content:"▸ ";color:var(--muted)}
+  details.about[open] summary::before{content:"▾ "}
+  details.about p{margin:9px 0 0;line-height:1.45}
+  details.about code{font-family:"Space Mono",monospace;font-size:11px;background:#f0eee6;padding:1px 4px;border-radius:4px}
+
+  /* popup */
+  .leaflet-popup-content-wrapper{border-radius:12px;box-shadow:var(--shadow)}
+  .leaflet-popup-content{margin:13px 15px;font-family:"Barlow";width:232px !important}
+  .pop h3{margin:0 0 2px;font-family:"Barlow Semi Condensed";font-weight:700;font-size:16px}
+  .pop .ptag{
+    display:inline-block;font-family:"Space Mono",monospace;font-size:10px;font-weight:700;
+    padding:3px 7px;border-radius:6px;color:#fff;margin-bottom:9px;letter-spacing:.03em;
+  }
+  .pop table{width:100%;border-collapse:collapse;font-size:12.5px}
+  .pop td{padding:3px 0;vertical-align:top}
+  .pop td.k{color:var(--muted);width:82px;padding-right:8px}
+  .pop td.v{font-weight:500}
+  .pop .mono{font-family:"Space Mono",monospace;font-size:11.5px}
+  .pop img{width:100%;border-radius:8px;margin-top:10px;border:1px solid var(--line-2);display:block}
+  .pop a.to{display:inline-block;margin-top:9px;font-size:12px;color:var(--asphalt);font-weight:600}
+
+  /* mobile collapse */
+  .collapse-btn{display:none;position:absolute;right:10px;top:12px;z-index:1001;
+    background:transparent;border:none;cursor:pointer;color:var(--asphalt);font-size:20px;line-height:1}
+  @media (max-width:560px){
+    .panel{top:0;left:0;right:0;width:100%;max-width:100%;border-radius:0 0 14px 14px;border-left:none;border-right:none}
+    .panel.collapsed .panel__body{display:none}
+    .collapse-btn{display:block}
+    h1{font-size:18px}
+  }
+
+  .cluster{
+    display:flex;align-items:center;justify-content:center;border-radius:50%;
+    color:#fff;font-family:"Space Mono",monospace;font-weight:700;font-size:12px;
+    border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.3)
+  }
+  .attrib-data{font-size:10px;color:var(--muted);text-align:right;padding:0 4px}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="panel" id="panel">
+  <button class="collapse-btn" id="collapseBtn" aria-label="Paneel in-/uitklappen">☰</button>
+  <div class="panel__head">
+    <p class="eyebrow">Verkeersborden · NDW open data</p>
+    <h1>C21-borden Amsterdam</h1>
+    <p class="sub">Gewichtsborden op de kaart, met onderscheid tussen de&nbsp;7,5t-zone en losse C21-borden.</p>
+  </div>
+
+  <div class="panel__body">
+
+    <!-- data status -->
+    <div class="block" id="statusBlock">
+      <div class="status" id="status"><span class="spin"></span><span id="statusTxt">Data ophalen bij NDW…</span></div>
+    </div>
+
+    <!-- dropzone (hidden until needed) -->
+    <div class="block" id="dropBlock" style="display:none">
+      <div class="dropcard">
+        <div class="dropzone" id="dropzone">
+          <strong>Sleep hier het NDW-bestand</strong>
+          <small>.geojson, .json of .csv — of klik om te kiezen</small>
+        </div>
+        <a class="btn" id="dlBtn" href="https://data.ndw.nu/api/rest/static-road-data/traffic-signs/v4/current-state?countyCode=GM0363&amp;rvvCode=C21&amp;contentType=csv&amp;crs=http%3A%2F%2Fwww.opengis.net%2Fdef%2Fcrs%2FOGC%2F1.3%2FCRS84" target="_blank" rel="noopener">⬇ Download C21 Amsterdam (CSV) van NDW</a>
+        <input type="file" id="fileInput" accept=".json,.geojson,.csv,.txt" style="display:none" />
+        <p class="hint">Automatisch ophalen lukt niet vanuit de browser (NDW staat cross-origin verzoeken niet toe). Download het bestand via de knop hierboven en sleep het hierin — of pak het via <a href="https://wegkenmerken.ndw.nu/kaart?kaartlagen=BRT,TRAFFIC_SIGN" target="_blank" rel="noopener">wegkenmerken.ndw.nu</a> per gemeente en bordsoort.</p>
+      </div>
+    </div>
+
+    <!-- primary view -->
+    <div class="block" id="controls" style="display:none">
+      <p class="label">Weergave</p>
+      <div class="views" id="views">
+        <label class="view" data-view="all" data-on="1">
+          <input type="radio" name="view" value="all" checked>
+          <span class="dot"></span>
+          <span class="vtxt">Alles tonen<small>Alle C21-borden</small></span>
+        </label>
+        <label class="view" data-view="mine">
+          <input type="radio" name="view" value="mine">
+          <span class="dot"></span>
+          <span class="vtxt">Alleen wat vóór mij geldt<small>Verbergt 7,5t-zoneborden (vrijstelling)</small></span>
+        </label>
+        <label class="view" data-view="exempt">
+          <input type="radio" name="view" value="exempt">
+          <span class="dot"></span>
+          <span class="vtxt">Alleen 7,5t-zoneborden<small>De borden waarvan je bent vrijgesteld</small></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- refine: weight -->
+    <div class="block" id="weightBlock" style="display:none">
+      <p class="label">Gewicht (t)</p>
+      <div class="chips" id="weightChips"></div>
+    </div>
+
+    <!-- refine: zone -->
+    <div class="block" id="zoneBlock" style="display:none">
+      <p class="label">Zonetype</p>
+      <div class="chips" id="zoneChips"></div>
+    </div>
+
+    <!-- refine: status -->
+    <div class="block" id="statusFilterBlock" style="display:none">
+      <p class="label">Status</p>
+      <div class="chips" id="statusChips"></div>
+    </div>
+
+    <!-- counts -->
+    <div class="block" id="countsBlock" style="display:none">
+      <p class="label">Aantallen</p>
+      <div class="counts">
+        <div class="count applies"><b id="cApplies">–</b><span>geldt voor jou</span></div>
+        <div class="count exempt"><b id="cExempt">–</b><span>vrijgesteld (7,5t-zone)</span></div>
+        <div class="count shown"><b id="cShown">–</b><span>zichtbaar met huidige filters</span></div>
+      </div>
+    </div>
+
+    <!-- legend -->
+    <div class="block" id="legendBlock" style="display:none">
+      <p class="label">Legenda</p>
+      <div class="legend">
+        <div class="leg">
+          <svg width="34" height="34" viewBox="0 0 40 40">
+            <circle cx="20" cy="20" r="15" fill="#fff" stroke="#CB1F27" stroke-width="4"/>
+            <text x="20" y="24" text-anchor="middle" font-family="Barlow Semi Condensed" font-weight="700" font-size="11" fill="#1C1E21">7,5</text>
+          </svg>
+          <div><b>Geldt voor jou</b> — rode ring</div>
+        </div>
+        <div class="leg">
+          <svg width="34" height="34" viewBox="0 0 40 40">
+            <circle cx="20" cy="20" r="15" fill="#fff" stroke="#9AA0A6" stroke-width="4"/>
+            <text x="20" y="24" text-anchor="middle" font-family="Barlow Semi Condensed" font-weight="700" font-size="11" fill="#6b6f76">7,5</text>
+            <rect x="26" y="1" width="15" height="11" rx="3" fill="#1C1E21"/>
+            <text x="33.5" y="9.5" text-anchor="middle" font-family="Space Mono" font-weight="700" font-size="7.5" fill="#fff">ZB</text>
+          </svg>
+          <div><b>Vrijgesteld</b> — grijze ring = 7,5t-zone</div>
+        </div>
+        <div class="leg">
+          <span class="zbadge">ZB</span>
+          <div>Zonebadge: <b>ZB</b> begin · <b>ZH</b> herhaling · <b>ZE</b> einde · <b>ZO</b> onbekend</div>
+        </div>
+      </div>
+    </div>
+
+    <details class="about">
+      <summary>Over deze kaart</summary>
+      <p>Bron: NDW open data verkeersborden (<code>rvvCode=C21</code>, <code>countyCode=GM0363</code>). Het onderscheid komt uit het veld <code>zoneCode</code> (ZB/ZH/ZE/ZO of leeg) en het gewicht uit <code>blackCode</code>.</p>
+      <p>Een bord telt als <b>vrijgesteld</b> wanneer het gewicht 7,5t is én het een herkende zone is (begin/herhaling/einde). <b>Zone onbekend</b> en <b>losse borden</b> gelden wél voor jou. Controleer altijd de exacte voorwaarden van je eigen RVV-ontheffing — deze kaart is een hulpmiddel, geen juridisch oordeel.</p>
+      <p>Kaart © OpenStreetMap-bijdragers © CARTO · Bordendata © NDW.</p>
+    </details>
+
+  </div>
+</div>
+
+<script>
+"use strict";
+
+if(typeof L==="undefined"){
+  const s=document.getElementById("status");
+  if(s){ s.className="status err"; s.innerHTML="<span>Kaartbibliotheek (Leaflet) kon niet laden. Controleer de internetverbinding of open het bestand rechtstreeks in een browser.</span>"; }
+  throw new Error("Leaflet not loaded");
+}
+
+
+/* ============================================================
+   Config
+   ============================================================ */
+const AMS = [52.372, 4.900];
+const LIVE_URL = "https://data.ndw.nu/api/rest/static-road-data/traffic-signs/v4/current-state?countyCode=GM0363&rvvCode=C21&crs=http%3A%2F%2Fwww.opengis.net%2Fdef%2Fcrs%2FOGC%2F1.3%2FCRS84";
+const ZONE_LABELS = { ZB:"Zone begin", ZH:"Zone herhaling", ZE:"Zone einde", ZO:"Zone onbekend", NONE:"Geen zone (los bord)" };
+
+/* ============================================================
+   Map
+   ============================================================ */
+const map = L.map("map",{zoomControl:true}).setView(AMS,13);
+map.zoomControl.setPosition("bottomright"); // keep top-left free for the panel
+const baseLight = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{
+  maxZoom:20, subdomains:"abcd",
+  attribution:'© OpenStreetMap © CARTO · borden © NDW · NWB © Rijkswaterstaat/PDOK'
+}).addTo(map);
+const baseOSM = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+  maxZoom:19, attribution:'© OpenStreetMap-bijdragers'
+});
+const baseAerial = L.tileLayer.wms("https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0",{
+  layers:"Actueel_orthoHR", format:"image/jpeg", version:"1.3.0", maxZoom:20,
+  attribution:'Luchtfoto © PDOK / Beeldmateriaal Nederland'
+});
+const nwbWegvakken = L.tileLayer.wms("https://service.pdok.nl/rws/nwbwegen/wms/v1_0",{
+  layers:"wegvakken", format:"image/png", transparent:true, version:"1.3.0", maxZoom:20,
+  attribution:'NWB © Rijkswaterstaat (PDOK)'
+}).addTo(map);
+const nwbHecto = L.tileLayer.wms("https://service.pdok.nl/rws/nwbwegen/wms/v1_0",{
+  layers:"hectopunten", format:"image/png", transparent:true, version:"1.3.0", maxZoom:20
+});
+L.control.layers(
+  {"Licht (CARTO)":baseLight,"OpenStreetMap":baseOSM,"Luchtfoto (PDOK)":baseAerial},
+  {"NWB wegvakken":nwbWegvakken,"NWB hectopunten":nwbHecto},
+  {position:"topright",collapsed:false}
+).addTo(map);
+
+const cluster = L.markerClusterGroup({
+  maxClusterRadius:48,
+  spiderfyOnMaxZoom:true,
+  showCoverageOnHover:false,
+  iconCreateFunction:(c)=>{
+    const kids=c.getAllChildMarkers();
+    const anyApplies=kids.some(m=>m.options._applies);
+    const n=c.getChildCount();
+    const sz = n<10?34 : n<50?40 : 46;
+    const bg = anyApplies ? "var(--applies)" : "var(--exempt)";
+    return L.divIcon({
+      html:`<div class="cluster" style="width:${sz}px;height:${sz}px;background:${bg}">${n}</div>`,
+      className:"", iconSize:[sz,sz]
+    });
+  }
+});
+map.addLayer(cluster);
+
+/* ============================================================
+   State
+   ============================================================ */
+let SIGNS = [];                 // normalized signs
+let viewMode = "all";           // all | mine | exempt
+const weightOn = new Set();     // enabled weight labels
+const zoneOn   = new Set();     // enabled zone cats (ZB/ZH/ZE/ZO/NONE)
+const statusOn = new Set();     // enabled statuses
+
+/* ============================================================
+   Parsing helpers
+   ============================================================ */
+function parseWeight(blackCode){
+  if(blackCode==null) return null;
+  const m = String(blackCode).replace(",",".").match(/-?\d+(\.\d+)?/);
+  return m ? parseFloat(m[0]) : null;
+}
+function weightLabel(w, raw){
+  if(w==null) return (raw==null||raw==="")?"?":String(raw);
+  return (Number.isInteger(w)?w:String(w)).toString().replace(".",",");
+}
+function zoneCat(zoneCode, rvvCode){
+  let z = (zoneCode||"").trim().toUpperCase();
+  if(z==="ZB"||z==="ZH"||z==="ZE"||z==="ZO") return z;
+  // legacy encoding: rvvCode "C21(Zone)" implies a zone with unknown role
+  if(/\(zone\)/i.test(rvvCode||"")) return "ZO";
+  return "NONE";
+}
+function isC21(rvv){ return /^c21/i.test((rvv||"").trim()); }
+
+/* Normalize one raw record (from GeoJSON props or CSV row) into our shape */
+function normalize(rec){
+  const rvv = rec.rvvCode;
+  if(!isC21(rvv)) return null;
+  const lat = rec.latitude!=null ? +rec.latitude : (rec._lat!=null? +rec._lat : null);
+  const lon = rec.longitude!=null ? +rec.longitude : (rec._lon!=null? +rec._lon : null);
+  if(lat==null||lon==null||isNaN(lat)||isNaN(lon)) return null;
+  const w = parseWeight(rec.blackCode);
+  const zc = zoneCat(rec.zoneCode, rvv);
+  const isZone = zc!=="NONE";                          // enige zonecode -> toon badge
+  const knownZone = (zc==="ZB"||zc==="ZH"||zc==="ZE"); // herkende zone (begin/herhaling/einde)
+  const is75 = w!=null && Math.abs(w-7.5)<0.05;
+  const exempt = is75 && knownZone;                    // vrijstelling alleen bij herkende 7,5t-zone
+  // textSigns can be array (geojson) or string (csv)
+  let onder = "";
+  if(Array.isArray(rec.textSigns)) onder = rec.textSigns.map(t=>t&&(t.text||t.type)).filter(Boolean).join("; ");
+  else if(typeof rec.textSigns==="string") onder = rec.textSigns;
+  return {
+    lat, lon,
+    rvv, weight:w, wlabel:weightLabel(w, rec.blackCode),
+    zoneCode:zc, isZone, is75, exempt,
+    status:(rec.status||"").toUpperCase(),
+    road:rec.roadName||rec.townName||"",
+    onder,
+    img:rec.imageUrl||"",
+    to:rec.trafficOrderUrl||""
+  };
+}
+
+/* Extract raw records from a GeoJSON payload (array or FeatureCollection) */
+function fromGeoJSON(data){
+  let feats = Array.isArray(data) ? data : (data && data.features) ? data.features : [];
+  return feats.map(f=>{
+    const p = (f && f.properties) ? {...f.properties} : {...f};
+    if(f && f.geometry && Array.isArray(f.geometry.coordinates)){
+      p._lon = f.geometry.coordinates[0];
+      p._lat = f.geometry.coordinates[1];
+    }
+    return p;
+  });
+}
+
+/* Minimal robust CSV parser (delimiter auto-detect, quoted fields) */
+function parseCSV(text){
+  text = text.replace(/^\uFEFF/,"");
+  const firstLine = text.slice(0, text.indexOf("\n")>-1?text.indexOf("\n"):text.length);
+  const delim = (firstLine.split(";").length > firstLine.split(",").length) ? ";" : ",";
+  const rows=[]; let row=[], cell="", q=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(q){
+      if(ch==='"'){ if(text[i+1]==='"'){cell+='"';i++;} else q=false; }
+      else cell+=ch;
+    }else{
+      if(ch==='"') q=true;
+      else if(ch===delim){ row.push(cell); cell=""; }
+      else if(ch==="\n"){ row.push(cell); rows.push(row); row=[]; cell=""; }
+      else if(ch==="\r"){ /* skip */ }
+      else cell+=ch;
+    }
+  }
+  if(cell.length||row.length){ row.push(cell); rows.push(row); }
+  if(!rows.length) return [];
+  const head = rows[0].map(h=>h.trim());
+  return rows.slice(1).filter(r=>r.length>1).map(r=>{
+    const o={}; head.forEach((h,idx)=> o[h]= r[idx]!==undefined? r[idx].trim() : "");
+    return o;
+  });
+}
+
+/* ============================================================
+   Ingest
+   ============================================================ */
+function ingest(rawRecords, sourceLabel){
+  const norm = rawRecords.map(normalize).filter(Boolean);
+  if(!norm.length){
+    setStatus("err","Bestand gelezen, maar geen C21-borden gevonden. Klopt de bordsoort/gemeente?");
+    return;
+  }
+  SIGNS = norm;
+  buildFilters();
+  render();
+  document.getElementById("dropBlock").style.display="none";
+  ["controls","weightBlock","zoneBlock","statusFilterBlock","countsBlock","legendBlock"].forEach(id=>{
+    document.getElementById(id).style.display="";
+  });
+  const nApplies = SIGNS.filter(s=>!s.exempt).length;
+  const nExempt  = SIGNS.filter(s=>s.exempt).length;
+  setStatus("ok",`${SIGNS.length} C21-borden geladen — ${sourceLabel}. ${nApplies} gelden voor jou, ${nExempt} vrijgesteld.`);
+}
+
+function setStatus(kind,msg){
+  const el=document.getElementById("status");
+  el.className="status"+(kind?(" "+kind):"");
+  el.innerHTML = (kind===""||kind==="")?`<span class="spin"></span><span>${msg}</span>`:`<span>${msg}</span>`;
+  document.getElementById("statusTxt")&&(document.getElementById("statusTxt").textContent=msg);
+}
+
+/* ============================================================
+   Filters UI
+   ============================================================ */
+function buildFilters(){
+  weightOn.clear(); zoneOn.clear(); statusOn.clear();
+  // weights present, sorted numeric (7.5 first if present)
+  const wmap=new Map();
+  SIGNS.forEach(s=>{ if(!wmap.has(s.wlabel)) wmap.set(s.wlabel, {w:s.weight, n:0}); wmap.get(s.wlabel).n++; });
+  const weights=[...wmap.entries()].sort((a,b)=>{
+    const aw=a[1].w??1e9, bw=b[1].w??1e9; return aw-bw;
+  });
+  const wc=document.getElementById("weightChips"); wc.innerHTML="";
+  weights.forEach(([lab,info])=>{
+    weightOn.add(lab);
+    wc.appendChild(chip(lab, `${lab}t`, info.n, ()=>toggleSet(weightOn,lab), true));
+  });
+
+  // zone cats present
+  const zpresent=new Set(SIGNS.map(s=>s.zoneCode));
+  const order=["ZB","ZH","ZE","ZO","NONE"];
+  const zc=document.getElementById("zoneChips"); zc.innerHTML="";
+  order.filter(z=>zpresent.has(z)).forEach(z=>{
+    zoneOn.add(z);
+    const n=SIGNS.filter(s=>s.zoneCode===z).length;
+    const lab = z==="NONE"?"Geen":z;
+    zc.appendChild(chip(z, lab, n, ()=>toggleSet(zoneOn,z), true));
+  });
+
+  // statuses present
+  const spresent=[...new Set(SIGNS.map(s=>s.status).filter(Boolean))];
+  const SLAB={PLACED:"Geplaatst",PLANNED:"Gepland",REMOVED:"Verwijderd"};
+  const sc=document.getElementById("statusChips"); sc.innerHTML="";
+  if(spresent.length){
+    spresent.forEach(st=>{
+      if(st!=="REMOVED") statusOn.add(st);
+      const n=SIGNS.filter(s=>s.status===st).length;
+      sc.appendChild(chip(st, SLAB[st]||st, n, ()=>toggleSet(statusOn,st), st!=="REMOVED"));
+    });
+  }else{
+    document.getElementById("statusFilterBlock").style.display="none";
+  }
+}
+function chip(id,label,count,onToggle,on){
+  const el=document.createElement("div");
+  el.className="chip"; el.dataset.on=on?"1":"0"; el.dataset.id=id;
+  el.innerHTML=`<span class="cdot"></span>${label}<small>${count}</small>`;
+  el.addEventListener("click",()=>{ el.dataset.on = el.dataset.on==="1"?"0":"1"; onToggle(); render(); });
+  return el;
+}
+function toggleSet(set,key){ if(set.has(key)) set.delete(key); else set.add(key); }
+
+/* view radios */
+document.getElementById("views").addEventListener("change",e=>{
+  viewMode=e.target.value;
+  document.querySelectorAll(".view").forEach(v=>v.dataset.on = v.dataset.view===viewMode?"1":"0");
+  render();
+});
+
+/* ============================================================
+   Render
+   ============================================================ */
+function passesView(s){
+  if(viewMode==="mine") return !s.exempt;
+  if(viewMode==="exempt") return s.exempt;
+  return true;
+}
+function visible(s){
+  return passesView(s)
+    && weightOn.has(s.wlabel)
+    && zoneOn.has(s.zoneCode)
+    && (statusOn.size===0 || statusOn.has(s.status) || !s.status);
+}
+
+function signIcon(s){
+  const ring = s.exempt ? "#9AA0A6" : "#CB1F27";
+  const txt  = s.exempt ? "#6b6f76" : "#1C1E21";
+  const size = s.wlabel.length>3 ? 9.5 : 11;
+  const badge = s.isZone ? `
+    <rect x="26" y="1" width="15" height="11" rx="3" fill="#1C1E21"/>
+    <text x="33.5" y="9.6" text-anchor="middle" font-family="Space Mono,monospace" font-weight="700" font-size="7.5" fill="#fff">${s.zoneCode}</text>` : "";
+  const html=`<svg width="40" height="40" viewBox="0 0 40 40" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))">
+    <circle cx="20" cy="20" r="15" fill="#fff" stroke="${ring}" stroke-width="4"/>
+    <text x="20" y="24" text-anchor="middle" font-family="Barlow Semi Condensed,sans-serif" font-weight="700" font-size="${size}" fill="${txt}">${s.wlabel}</text>
+    ${badge}
+  </svg>`;
+  return L.divIcon({html, className:"", iconSize:[40,40], iconAnchor:[20,20], popupAnchor:[0,-18]});
+}
+
+function popupHTML(s){
+  const tag = s.exempt
+    ? `<span class="ptag" style="background:#7d8288">VRIJGESTELD · 7,5t-zone</span>`
+    : `<span class="ptag" style="background:#CB1F27">GELDT VOOR JOU</span>`;
+  const rows=[
+    ["Gewicht", `<span class="mono">${s.wlabel} t</span>`],
+    ["Zone", `${ZONE_LABELS[s.zoneCode]} <span class="mono">(${s.zoneCode})</span>`],
+    s.status?["Status", s.status==="PLACED"?"Geplaatst":s.status==="PLANNED"?"Gepland":s.status]:null,
+    s.road?["Locatie", s.road]:null,
+    s.onder?["Onderbord", s.onder]:null
+  ].filter(Boolean);
+  return `<div class="pop">
+    <h3>C21 · ${s.wlabel} ton</h3>${tag}
+    <table>${rows.map(r=>`<tr><td class="k">${r[0]}</td><td class="v">${r[1]}</td></tr>`).join("")}</table>
+    ${s.img?`<img src="${s.img}" alt="foto bord" loading="lazy" onerror="this.style.display='none'">`:""}
+    ${s.to?`<a class="to" href="${s.to}" target="_blank" rel="noopener">Verkeersbesluit ↗</a>`:""}
+  </div>`;
+}
+
+function render(){
+  cluster.clearLayers();
+  let shown=0;
+  const markers=[];
+  for(const s of SIGNS){
+    if(!visible(s)) continue;
+    shown++;
+    const m=L.marker([s.lat,s.lon],{icon:signIcon(s), _applies:!s.exempt});
+    m.bindPopup(()=>popupHTML(s),{closeButton:true});
+    markers.push(m);
+  }
+  cluster.addLayers(markers);
+
+  const nApplies=SIGNS.filter(s=>!s.exempt).length;
+  const nExempt =SIGNS.filter(s=>s.exempt).length;
+  document.getElementById("cApplies").textContent=nApplies;
+  document.getElementById("cExempt").textContent=nExempt;
+  document.getElementById("cShown").textContent=shown;
+}
+
+/* ============================================================
+   Data loading: live fetch → fallback to file
+   ============================================================ */
+function showDropzone(reason){
+  document.getElementById("dropBlock").style.display="";
+  setStatus("err", reason);
+}
+
+async function tryLive(){
+  setStatus("", "Data ophalen bij NDW…");
+  try{
+    const ctrl=new AbortController();
+    const t=setTimeout(()=>ctrl.abort(),12000);
+    const res=await fetch(LIVE_URL,{headers:{"Accept":"application/geo+json"},signal:ctrl.signal});
+    clearTimeout(t);
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const data=await res.json();
+    ingest(fromGeoJSON(data), "live van NDW");
+  }catch(err){
+    showDropzone("Live ophalen lukt niet (CORS/verbinding). Download het bestand hieronder en sleep het hierin.");
+  }
+}
+
+/* File input + drag/drop */
+const dz=document.getElementById("dropzone");
+const fi=document.getElementById("fileInput");
+dz.addEventListener("click",()=>fi.click());
+fi.addEventListener("change",e=>{ if(e.target.files[0]) readFile(e.target.files[0]); });
+["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add("drag");}));
+["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove("drag");}));
+dz.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) readFile(f); });
+// allow dropping anywhere on the map too
+["dragover","drop"].forEach(ev=>document.getElementById("map").addEventListener(ev,e=>e.preventDefault()));
+
+function readFile(file){
+  setStatus("", "Bestand lezen: "+file.name+"…");
+  const r=new FileReader();
+  r.onload=()=>{
+    const text=String(r.result);
+    try{
+      if(/\.csv$|\.txt$/i.test(file.name) || (!/^\s*[[{]/.test(text))){
+        ingest(parseCSV(text).map(o=>o), "uit "+file.name);
+      }else{
+        ingest(fromGeoJSON(JSON.parse(text)), "uit "+file.name);
+      }
+    }catch(err){
+      setStatus("err","Kon dit bestand niet lezen ("+err.message+"). Verwacht: NDW GeoJSON of CSV.");
+    }
+  };
+  r.onerror=()=>setStatus("err","Bestand kon niet worden ingelezen.");
+  r.readAsText(file);
+}
+
+/* mobile collapse */
+document.getElementById("collapseBtn").addEventListener("click",()=>{
+  document.getElementById("panel").classList.toggle("collapsed");
+  setTimeout(()=>map.invalidateSize(),200);
+});
+
+/* go */
+tryLive();
+</script>
+</body>
+</html>
