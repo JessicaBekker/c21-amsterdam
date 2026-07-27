@@ -1,0 +1,48 @@
+name: Update accessibility data
+
+on:
+  schedule:
+    - cron: "17 3 * * *"      # elke dag om 03:17 UTC
+  workflow_dispatch: {}         # + handmatig te starten via de Actions-tab
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch accessibility from NDW
+        run: |
+          curl -sS --fail-with-body \
+            -X POST "https://data.ndw.nu/api/rest/static-road-data/accessibility-map/v2/accessibility.geojson" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/geo+json" \
+            -H "User-Agent: jess-gearbox-c21-amsterdam/1.0" \
+            --data @vehicle-request.json \
+            -o accessibility.geojson
+
+      - name: Validate response
+        run: |
+          python3 - <<'PY'
+          import json
+          d = json.load(open("accessibility.geojson"))
+          feats = d.get("features")
+          assert isinstance(feats, list) and len(feats) > 0, "geen features in antwoord"
+          print("OK - features:", len(feats))
+          PY
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain accessibility.geojson)" ]; then
+            git add accessibility.geojson
+            git commit -m "Update accessibility data ($(date -u +%F))"
+            git push
+          else
+            echo "Geen wijziging in accessibility.geojson"
+          fi
