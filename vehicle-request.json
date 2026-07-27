@@ -1,0 +1,16 @@
+{
+  "area": { "type": "municipality", "id": "GM0363" },
+  "vehicle": {
+    "type": "truck",
+    "height": 4.0,
+    "weight": 22.5,
+    "width": 2.35,
+    "length": 8.25,
+    "axleLoad": 10.5,
+    "hasTrailer": false,
+    "emissionClass": "euro_6",
+    "fuelTypes": ["diesel"]
+  },
+  "includeAccessibleRoadSections": true,
+  "includeInaccessibleRoadSections": true
+}

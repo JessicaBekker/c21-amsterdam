@@ -208,12 +208,11 @@
   }
   .attrib-data{font-size:10px;color:var(--muted);text-align:right;padding:0 4px}
 
-/* MVP extras */
 .veh{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .veh label{display:flex;flex-direction:column;font-size:11px;color:var(--muted);gap:3px;font-family:"Space Mono",monospace;text-transform:uppercase;letter-spacing:.04em}
 .veh input,.veh select{font-family:"Barlow";font-size:13.5px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .veh .full{grid-column:1/-1}
-.btn.calc{background:var(--accent);color:var(--asphalt);border-color:var(--accent);font-weight:700;margin-top:10px}
+.btn.calc{margin-top:10px}
 .tip{font-size:12px;color:var(--asphalt-2);background:#fbfaf6;border:1px solid var(--line-2);border-radius:9px;padding:9px 10px;line-height:1.4}
 .tip b{color:var(--asphalt)}
 .pop .rz{font-size:12px;margin-top:6px;line-height:1.4}
@@ -234,23 +233,23 @@
   <div class="panel__body">
 
     <div class="block">
-      <p class="label">Voertuigprofiel</p>
+      <p class="label">Voertuigprofiel (dagelijks berekend)</p>
       <div class="veh">
         <label class="full">Type
           <select id="v_type"><option value="truck" selected>Vrachtwagen</option><option value="bus">Bus</option><option value="tractor">Trekker</option><option value="light_commercial_vehicle">Bestelwagen</option></select>
         </label>
         <label>Hoogte (m)<input id="v_height" type="number" step="0.1" min="0" max="4" value="4.0"></label>
-        <label>Gewicht (t)<input id="v_weight" type="number" step="0.5" min="0" max="60" value="20"></label>
-        <label>Breedte (m)<input id="v_width" type="number" step="0.05" min="0" max="3" value="2.55"></label>
-        <label>Lengte (m)<input id="v_length" type="number" step="0.1" min="0" max="22" value="10"></label>
-        <label>Aslast (t)<input id="v_axle" type="number" step="0.5" min="0" max="12" value="11.5"></label>
+        <label>Gewicht (t)<input id="v_weight" type="number" step="0.5" min="0" max="60" value="22.5"></label>
+        <label>Breedte (m)<input id="v_width" type="number" step="0.05" min="0" max="3" value="2.35"></label>
+        <label>Lengte (m)<input id="v_length" type="number" step="0.1" min="0" max="22" value="8.25"></label>
+        <label>Aslast (t)<input id="v_axle" type="number" step="0.5" min="0" max="12" value=""></label>
         <label>Aanhanger<select id="v_trailer"><option value="false" selected>Nee</option><option value="true">Ja</option></select></label>
       </div>
-      <a class="btn calc" id="calcBtn">Bereken bereikbaarheid</a>
-      <p class="hint">Pas de waarden aan naar je eigen voertuig. Er staat geen kenteken of merk in deze kaart.</p>
+      <a class="btn ghost calc" id="calcBtn">Live herberekenen (experimenteel)</a>
+      <p class="hint">De getoonde laag is dagelijks voorberekend voor dit profiel (diesel Euro 6). Waarden aanpassen + live herberekenen werkt pas als de live-API is aangesloten. Geen kenteken of merk in deze kaart.</p>
     </div>
 
-    <div class="block"><div class="status" id="status"><span>Vul het profiel in en klik ‘Bereken bereikbaarheid’.</span></div></div>
+    <div class="block"><div class="status" id="status"><span class="spin"></span><span>Bereikbaarheid laden…</span></div></div>
 
     <div class="block" id="legendBlock" style="display:none">
       <p class="label">Legenda</p>
@@ -262,13 +261,13 @@
     </div>
 
     <div class="block" id="tipBlock" style="display:none">
-      <div class="tip"><b>Tip:</b> klik ergens op de kaart om te checken of je er met dit voertuig komt — en zo nee, waarom. Als het alleen de 7,5t-zone is, zie je dat er expliciet bij.</div>
+      <div class="tip"><b>Tip:</b> klik ergens op de kaart om per punt te checken of je er komt — en zo nee, waarom. Als het alleen de 7,5t-zone is, zie je dat er expliciet bij. (Puntcheck werkt zodra de live-API is aangesloten.)</div>
     </div>
 
     <details class="about">
       <summary>Over deze kaart (MVP)</summary>
-      <p>Bereikbaarheid via de NDW-bereikbaarheids-API (openbaar, POST, gemeente GM0363). Rood = niet bereikbaar voor het ingevoerde voertuig; de 7,5t-zone (jouw ontheffing) ligt er als aparte laag overheen. Borden <b>met onderbord</b> (venstertijden, uitzonderingen) worden door de API genegeerd en tellen als bereikbaar; afslagverboden tellen niet mee.</p>
-      <p>Dit is een eerste MVP op één voertuigprofiel. Volgende stap: per punt de ontheffing-correctie automatisch verwerken, en later zelf voertuig kiezen.</p>
+      <p>Bereikbaarheid via de NDW-bereikbaarheids-API (gemeente GM0363), dagelijks server-side voorberekend en hier ingeladen. Rood = niet bereikbaar voor het profiel; de 7,5t-zone (jouw ontheffing) ligt er als aparte laag overheen. Borden <b>met onderbord</b> (venstertijden, uitzonderingen) worden door de API genegeerd en tellen als bereikbaar; afslagverboden tellen niet mee.</p>
+      <p>MVP op één profiel. Volgende stappen: ontheffing-correctie op de gebiedslaag, live puntcheck via een tussenlaagje, en zelf voertuig kiezen.</p>
       <p>Kaart © OSM © CARTO · NWB © RWS/PDOK · borden & bereikbaarheid © NDW.</p>
     </details>
   </div>
@@ -289,15 +288,14 @@ const baseLight=L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}
 const baseOSM=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap-bijdragers"});
 const baseAerial=L.tileLayer.wms("https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0",{layers:"Actueel_orthoHR",format:"image/jpeg",version:"1.3.0",maxZoom:20,attribution:"Luchtfoto © PDOK"});
 const nwbWegvakken=L.tileLayer.wms("https://service.pdok.nl/rws/nwbwegen/wms/v1_0",{layers:"wegvakken",format:"image/png",transparent:true,version:"1.3.0",maxZoom:20});
-const accessLayer=L.layerGroup().addTo(map);   // road segments
-const zoneLayer=L.layerGroup().addTo(map);      // 7,5t-zone signs overlay
+const accessLayer=L.layerGroup().addTo(map);
+const zoneLayer=L.layerGroup().addTo(map);
 L.control.layers(
   {"Licht (CARTO)":baseLight,"OpenStreetMap":baseOSM,"Luchtfoto (PDOK)":baseAerial},
   {"NWB wegvakken":nwbWegvakken,"7,5t-zoneborden":zoneLayer,"Bereikbaarheid":accessLayer},
   {position:"topright",collapsed:false}
 ).addTo(map);
 
-/* ---- reused helpers ---- */
 function parseWeight(blackCode){
   if(blackCode==null) return null;
   const m = String(blackCode).replace(",",".").match(/-?\d+(\.\d+)?/);
@@ -391,8 +389,7 @@ function parseCSV(text){
    Ingest
    ============================================================ */
 
-/* ---- C21 index + 7,5t overlay ---- */
-const c21ById=new Map();     // trafficSignId -> {zone,is75,wlabel}
+const c21ById=new Map();
 function signGlyph(s){
   const html=`<svg width="34" height="34" viewBox="0 0 40 40" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))">
     <circle cx="20" cy="20" r="14" fill="#fff" stroke="#9AA0A6" stroke-width="4"/>
@@ -410,40 +407,24 @@ async function loadSigns(){
     feats.forEach(s=>{
       const known=(s.zoneCode==="ZB"||s.zoneCode==="ZH"||s.zoneCode==="ZE");
       if(s.id) c21ById.set(String(s.id),{zone:s.zoneCode,is75:s.is75,known:known,wlabel:s.wlabel});
-      if(s.is75 && known){                 // 7,5t-zone signs -> overlay
+      if(s.is75 && known){
         L.marker([s.lat,s.lon],{icon:signGlyph(s)})
           .bindPopup('<div class="pop"><h3>C21 · '+s.wlabel+' t</h3><span class="ptag" style="background:#7d8288">7,5t-zone · '+(ZONE_LABELS[s.zoneCode]||s.zoneCode)+'</span></div>')
           .addTo(zoneLayer);
       }
     });
-  }catch(e){ /* overlay optional; ignore if it fails */ }
+  }catch(e){}
 }
 
-/* ---- vehicle profile ---- */
 function readVehicle(){
-  const num=id=>parseFloat(document.getElementById(id).value);
-  return {
-    type:document.getElementById("v_type").value,
-    height:num("v_height"), weight:num("v_weight"), width:num("v_width"),
-    length:num("v_length"), axleLoad:num("v_axle"),
-    hasTrailer:document.getElementById("v_trailer").value==="true"
-  };
+  const num=id=>{const v=parseFloat(document.getElementById(id).value);return isNaN(v)?undefined:v;};
+  const o={type:document.getElementById("v_type").value,height:num("v_height"),weight:num("v_weight"),width:num("v_width"),length:num("v_length"),hasTrailer:document.getElementById("v_trailer").value==="true",emissionClass:"euro_6",fuelTypes:["diesel"]};
+  const a=num("v_axle"); if(a!==undefined) o.axleLoad=a;
+  return o;
 }
 function setStatus(kind,msg){const el=document.getElementById("status");el.className="status"+(kind?(" "+kind):"");el.innerHTML="<span>"+msg+"</span>";}
+function showBlocks(){["legendBlock","tipBlock"].forEach(id=>document.getElementById(id).style.display="");}
 
-/* ---- accessibility (area) ---- */
-async function computeArea(){
-  setStatus("","Bereikbaarheid berekenen bij NDW…");
-  const body={area:{type:"municipality",id:"GM0363"},vehicle:readVehicle(),includeAccessibleRoadSections:true,includeInaccessibleRoadSections:true};
-  try{
-    const res=await fetch(ACCESS_URL,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/geo+json"},body:JSON.stringify(body)});
-    if(!res.ok) throw new Error("HTTP "+res.status);
-    const data=await res.json();
-    renderArea(data);
-  }catch(e){
-    setStatus("err","Berekening lukt niet vanaf deze site (waarschijnlijk CORS op de POST). Zodra gehost testen we dit; lukt het dan ook niet, dan reken ik het dagelijks voor via een Action. ("+e.message+")");
-  }
-}
 function renderArea(data){
   accessLayer.clearLayers();
   const feats=(data.features||[]).filter(f=>f.properties&&f.properties.type==="roadSectionSegment");
@@ -453,11 +434,36 @@ function renderArea(data){
     onEachFeature:(f,l)=>{ if(!f.properties.accessible) l.bindPopup('<div class="pop"><span class="no">Niet bereikbaar</span><div class="rz">Wegvak '+f.properties.roadSectionId+'. Klik op de kaart voor de reden.</div></div>'); }
   });
   accessLayer.addLayer(gj);
-  ["legendBlock","tipBlock"].forEach(id=>document.getElementById(id).style.display="");
-  setStatus("ok",inacc+" niet-bereikbare + "+acc+" bereikbare wegvak-richtingen voor dit profiel. Klik op de kaart voor een puntcheck.");
+  showBlocks();
+  return {acc,inacc};
 }
 
-/* ---- destination click check (V3 taste) ---- */
+/* primary: load daily precomputed file (same-origin, no CORS) */
+async function loadPrecomputed(){
+  try{
+    const res=await fetch("accessibility.geojson?v="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const data=await res.json();
+    const c=renderArea(data);
+    setStatus("ok",c.inacc+" niet-bereikbare + "+c.acc+" bereikbare wegvak-richtingen — dagelijks bijgewerkt via NDW (22,5t / 4m / diesel Euro 6). Klik op de kaart voor een puntcheck.");
+  }catch(e){
+    showBlocks();
+    setStatus("err","Nog geen voorberekende data. Draai de Action één keer: Actions-tab → ‘Update accessibility data’ → Run workflow. Daarna verschijnt de laag vanzelf. ("+e.message+")");
+  }
+}
+
+/* experimental: live recompute (blocked by CORS until a proxy is added) */
+async function computeArea(){
+  setStatus("","Live herberekenen…");
+  const body={area:{type:"municipality",id:"GM0363"},vehicle:readVehicle(),includeAccessibleRoadSections:true,includeInaccessibleRoadSections:true};
+  try{
+    const res=await fetch(ACCESS_URL,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/geo+json"},body:JSON.stringify(body)});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const c=renderArea(await res.json());
+    setStatus("ok",c.inacc+" niet-bereikbaar + "+c.acc+" bereikbaar (live berekend).");
+  }catch(e){ setStatus("err","Live herberekenen lukt nog niet vanaf deze site (CORS op de POST). De getoonde laag komt uit de dagelijkse voorberekening en is actueel. ("+e.message+")"); }
+}
+
 let busy=false;
 async function checkPoint(latlng){
   if(busy) return; busy=true;
@@ -469,31 +475,29 @@ async function checkPoint(latlng){
     const data=await res.json();
     const dest=(data.features||[]).find(f=>f.properties&&f.properties.type==="destination");
     popup.setContent(renderDest(dest));
-  }catch(e){ popup.setContent('<div class="pop"><div class="rz">Check lukt niet ('+e.message+').</div></div>'); }
+  }catch(e){ popup.setContent('<div class="pop"><div class="rz">Puntcheck werkt zodra de live-API is aangesloten (nu geblokkeerd door CORS). De rode/groene laag hierboven is wél actueel.</div></div>'); }
   busy=false;
 }
 function renderDest(dest){
-  if(!dest) return '<div class="pop"><div class="rz">Geen bestemmingsinfo teruggekregen voor dit punt.</div></div>';
-  if(dest.properties.accessible) return '<div class="pop"><span class="ok">✓ Bereikbaar</span><div class="rz">Dit punt is bereikbaar voor het ingevoerde voertuig.</div></div>';
-  const groups=dest.properties.reasons||[];
-  const signIds=[]; const types=new Set();
-  groups.forEach(g=>g.forEach(r=>{ if(r.type)types.add(r.type); (r.becauseOf||[]).forEach(b=>{ if(b.type==="trafficSign"){ signIds.push({id:String(b.trafficSignId||""),t:b.trafficSignType}); } }); }));
-  // ontheffing check: are ALL blocking signs 7,5t-zone C21?
-  const c21signs=signIds.filter(x=>/^C21/i.test(x.t||""));
+  if(!dest) return '<div class="pop"><div class="rz">Geen bestemmingsinfo voor dit punt.</div></div>';
+  if(dest.properties.accessible) return '<div class="pop"><span class="ok">✓ Bereikbaar</span><div class="rz">Dit punt is bereikbaar voor dit voertuig.</div></div>';
+  const groups=dest.properties.reasons||[]; const signIds=[]; const types=new Set();
+  groups.forEach(g=>g.forEach(r=>{ if(r.type)types.add(r.type); (r.becauseOf||[]).forEach(b=>{ if(b.type==="trafficSign") signIds.push({id:String(b.trafficSignId||""),t:b.trafficSignType}); }); }));
   const nonC21=signIds.filter(x=>!/^C21/i.test(x.t||""));
-  let allZone75 = signIds.length>0 && nonC21.length===0 && c21signs.every(x=>{const m=c21ById.get(x.id);return m&&m.is75&&m.known;});
-  const labelMap={vehicleWeightRestriction:"gewicht",vehicleHeightRestriction:"hoogte",vehicleWidthRestriction:"breedte",vehicleLengthRestriction:"lengte",vehicleAxleWeightRestriction:"aslast",accessibleRestriction:"afgesloten",vehicleTypeRestriction:"voertuigtype",fuelTypeRestriction:"brandstof"};
+  const allZone75 = signIds.length>0 && nonC21.length===0 && signIds.every(x=>{const m=c21ById.get(x.id);return m&&m.is75&&m.known;});
+  const labelMap={vehicleWeightRestriction:"gewicht",vehicleHeightRestriction:"hoogte",vehicleWidthRestriction:"breedte",vehicleLengthRestriction:"lengte",vehicleAxleWeightRestriction:"aslast",accessibleRestriction:"afgesloten",vehicleTypeRestriction:"voertuigtype",fuelTypeRestriction:"brandstof/milieuzone"};
   const reasonTxt=[...types].map(t=>labelMap[t]||t).join(", ");
   let html='<div class="pop"><span class="no">✗ Niet bereikbaar</span><div class="rz">Belemmering: '+(reasonTxt||"onbekend")+'.</div>';
   if(allZone75) html+='<div class="exempt-note">Dit lijkt <b>alleen</b> de 7,5t-zone — met jouw ontheffing waarschijnlijk wél toegankelijk. (Controleer je ontheffingsvoorwaarden.)</div>';
-  html+='</div>';
-  return html;
+  return html+'</div>';
 }
+
 map.on("click",e=>checkPoint(e.latlng));
 document.getElementById("calcBtn").addEventListener("click",computeArea);
 document.getElementById("collapseBtn").addEventListener("click",()=>{document.getElementById("panel").classList.toggle("collapsed");setTimeout(()=>map.invalidateSize(),200);});
 
-loadSigns();   // load the 7,5t overlay + build id index
+loadSigns();
+loadPrecomputed();
 </script>
 </body>
 </html>
