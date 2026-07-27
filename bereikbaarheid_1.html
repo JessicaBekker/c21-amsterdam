@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Bereikbaarheid MVP — vrachtwagen Amsterdam</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --applies:#CB1F27;      /* signaalrood — prohibitieve ring, "geldt voor jou" */
+    --applies-soft:#f7dcdd;
+    --exempt:#9AA0A6;       /* gedempt grijs — "vrijgesteld (7,5t-zone)" */
+    --exempt-soft:#eceef0;
+    --asphalt:#1C1E21;      /* inkt / UI-chrome */
+    --asphalt-2:#3b3f45;
+    --concrete:#F4F2EC;     /* paneel-achtergrond */
+    --paper:#FFFFFF;
+    --accent:#F2C300;       /* wegmarkering-geel — actieve staat / focus (spaarzaam) */
+    --line:#DDD9CF;
+    --line-2:#ece8de;
+    --muted:#6b6f76;
+    --shadow:0 8px 30px rgba(20,22,25,.14), 0 2px 8px rgba(20,22,25,.08);
+    font-synthesis:none;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+    color:var(--asphalt);
+    background:var(--concrete);
+    -webkit-font-smoothing:antialiased;
+  }
+  #map{position:absolute;inset:0;background:#e9e7df;z-index:0}
+
+  /* ---------- Control panel ---------- */
+  .panel{
+    position:absolute;top:14px;left:14px;z-index:1000;
+    width:344px;max-width:calc(100vw - 28px);
+    max-height:calc(100vh - 28px);
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:14px;
+    box-shadow:var(--shadow);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .panel__head{
+    padding:15px 16px 13px;
+    border-bottom:1px solid var(--line-2);
+    background:
+      linear-gradient(var(--paper),var(--paper)) padding-box,
+      linear-gradient(90deg,var(--applies) 0 34%, var(--asphalt) 34% 66%, var(--exempt) 66% 100%) border-box;
+    border-top:3px solid transparent;
+    border-radius:14px 14px 0 0;
+  }
+  .eyebrow{
+    font-family:"Space Mono",monospace;font-size:10.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--muted);margin:0 0 3px;
+  }
+  h1{
+    font-family:"Barlow Semi Condensed",sans-serif;font-weight:700;
+    font-size:20px;line-height:1.05;margin:0;letter-spacing:-.01em;
+  }
+  .sub{font-size:12.5px;color:var(--muted);margin:6px 0 0;line-height:1.35}
+  .panel__body{padding:14px 16px 16px;overflow-y:auto;overscroll-behavior:contain}
+
+  .block{margin-bottom:16px}
+  .block:last-child{margin-bottom:2px}
+  .label{
+    font-family:"Space Mono",monospace;font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--asphalt-2);margin:0 0 8px;font-weight:700;
+  }
+
+  /* primary view radio */
+  .views{display:flex;flex-direction:column;gap:6px}
+  .view{
+    display:flex;align-items:center;gap:10px;
+    border:1px solid var(--line);border-radius:9px;
+    padding:9px 11px;cursor:pointer;background:var(--paper);
+    transition:border-color .12s, background .12s;
+    font-size:13.5px;font-weight:500;
+  }
+  .view:hover{border-color:#c9c4b6}
+  .view input{position:absolute;opacity:0;pointer-events:none}
+  .view .dot{
+    width:15px;height:15px;border-radius:50%;border:2px solid #b9b4a6;flex:0 0 auto;position:relative;
+  }
+  .view[data-on="1"]{border-color:var(--asphalt);background:#fbfaf6}
+  .view[data-on="1"] .dot{border-color:var(--asphalt)}
+  .view[data-on="1"] .dot::after{
+    content:"";position:absolute;inset:3px;border-radius:50%;background:var(--accent);
+  }
+  .view .vtxt{display:flex;flex-direction:column;line-height:1.15}
+  .view .vtxt small{font-size:11px;color:var(--muted);font-weight:400;margin-top:2px}
+
+  /* chips */
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{
+    font-family:"Space Mono",monospace;font-size:11.5px;font-weight:700;
+    border:1px solid var(--line);border-radius:20px;padding:5px 11px;cursor:pointer;
+    background:var(--paper);color:var(--asphalt-2);user-select:none;
+    transition:all .12s;display:inline-flex;align-items:center;gap:6px;
+  }
+  .chip:hover{border-color:#c9c4b6}
+  .chip[data-on="1"]{background:var(--asphalt);color:#fff;border-color:var(--asphalt)}
+  .chip[data-on="1"] .cdot{background:var(--accent)}
+  .chip .cdot{width:7px;height:7px;border-radius:50%;background:#c9c4b6}
+  .chip small{font-weight:400;opacity:.7;font-family:"Barlow"}
+
+  /* counts */
+  .counts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px}
+  .count{
+    border:1px solid var(--line-2);border-radius:10px;padding:9px 11px;background:#fbfaf6;
+  }
+  .count b{font-family:"Space Mono",monospace;font-size:19px;display:block;line-height:1}
+  .count span{font-size:11px;color:var(--muted);display:block;margin-top:4px}
+  .count.applies b{color:var(--applies)}
+  .count.exempt b{color:#7d8288}
+  .count.shown{grid-column:1 / -1;background:#fff;border-color:var(--line)}
+  .count.shown b{color:var(--asphalt)}
+
+  /* legend */
+  .legend{display:flex;flex-direction:column;gap:9px}
+  .leg{display:flex;align-items:center;gap:11px;font-size:12.5px}
+  .leg svg{flex:0 0 auto}
+  .leg .zbadge{
+    font-family:"Space Mono",monospace;font-weight:700;font-size:10px;color:#fff;
+    background:var(--asphalt);border-radius:4px;padding:2px 5px;
+  }
+
+  /* data status / loader / dropzone */
+  .status{
+    font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;
+    padding:8px 10px;border:1px dashed var(--line);border-radius:9px;background:#fbfaf6;
+  }
+  .status .spin{
+    width:13px;height:13px;border-radius:50%;border:2px solid #d6d1c4;border-top-color:var(--asphalt);
+    animation:spin .8s linear infinite;flex:0 0 auto;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .status.err{color:#8a2d2d;border-color:#e2b9b9;background:#fbf2f2;border-style:solid}
+  .status.ok{color:#2f6b3f;border-color:#bfe0c6;background:#f2f9f3;border-style:solid}
+
+  .dropcard{border:1px solid var(--line);border-radius:11px;padding:14px;background:#fff}
+  .dropzone{
+    border:2px dashed #cfcabb;border-radius:10px;padding:18px 12px;text-align:center;
+    cursor:pointer;transition:all .14s;background:#fbfaf6;
+  }
+  .dropzone:hover,.dropzone.drag{border-color:var(--asphalt);background:#f6f4ee}
+  .dropzone strong{display:block;font-size:13.5px;margin-bottom:3px}
+  .dropzone small{font-size:11.5px;color:var(--muted)}
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;justify-content:center;width:100%;
+    margin-top:10px;padding:9px 12px;border-radius:9px;border:1px solid var(--asphalt);
+    background:var(--asphalt);color:#fff;font-family:"Barlow";font-size:13px;font-weight:600;
+    text-decoration:none;cursor:pointer;transition:opacity .12s;
+  }
+  .btn:hover{opacity:.9}
+  .btn.ghost{background:#fff;color:var(--asphalt)}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:9px;line-height:1.4}
+  .hint a{color:var(--asphalt-2)}
+
+  details.about{margin-top:4px;font-size:12px;color:var(--muted)}
+  details.about summary{cursor:pointer;font-family:"Space Mono",monospace;font-size:10.5px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--asphalt-2);font-weight:700;list-style:none}
+  details.about summary::-webkit-details-marker{display:none}
+  details.about summary::before{content:"▸ ";color:var(--muted)}
+  details.about[open] summary::before{content:"▾ "}
+  details.about p{margin:9px 0 0;line-height:1.45}
+  details.about code{font-family:"Space Mono",monospace;font-size:11px;background:#f0eee6;padding:1px 4px;border-radius:4px}
+
+  /* popup */
+  .leaflet-popup-content-wrapper{border-radius:12px;box-shadow:var(--shadow)}
+  .leaflet-popup-content{margin:13px 15px;font-family:"Barlow";width:232px !important}
+  .pop h3{margin:0 0 2px;font-family:"Barlow Semi Condensed";font-weight:700;font-size:16px}
+  .pop .ptag{
+    display:inline-block;font-family:"Space Mono",monospace;font-size:10px;font-weight:700;
+    padding:3px 7px;border-radius:6px;color:#fff;margin-bottom:9px;letter-spacing:.03em;
+  }
+  .pop table{width:100%;border-collapse:collapse;font-size:12.5px}
+  .pop td{padding:3px 0;vertical-align:top}
+  .pop td.k{color:var(--muted);width:82px;padding-right:8px}
+  .pop td.v{font-weight:500}
+  .pop .mono{font-family:"Space Mono",monospace;font-size:11.5px}
+  .pop img{width:100%;border-radius:8px;margin-top:10px;border:1px solid var(--line-2);display:block}
+  .pop a.to{display:inline-block;margin-top:9px;font-size:12px;color:var(--asphalt);font-weight:600}
+
+  /* mobile collapse */
+  .collapse-btn{display:none;position:absolute;right:10px;top:12px;z-index:1001;
+    background:transparent;border:none;cursor:pointer;color:var(--asphalt);font-size:20px;line-height:1}
+  @media (max-width:560px){
+    .panel{top:0;left:0;right:0;width:100%;max-width:100%;border-radius:0 0 14px 14px;border-left:none;border-right:none}
+    .panel.collapsed .panel__body{display:none}
+    .collapse-btn{display:block}
+    h1{font-size:18px}
+  }
+
+  .cluster{
+    display:flex;align-items:center;justify-content:center;border-radius:50%;
+    color:#fff;font-family:"Space Mono",monospace;font-weight:700;font-size:12px;
+    border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.3)
+  }
+  .attrib-data{font-size:10px;color:var(--muted);text-align:right;padding:0 4px}
+
+.veh{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.veh label{display:flex;flex-direction:column;font-size:11px;color:var(--muted);gap:3px;font-family:"Space Mono",monospace;text-transform:uppercase;letter-spacing:.04em}
+.veh input,.veh select{font-family:"Barlow";font-size:13.5px;padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.veh .full{grid-column:1/-1}
+.btn.calc{margin-top:10px}
+.tip{font-size:12px;color:var(--asphalt-2);background:#fbfaf6;border:1px solid var(--line-2);border-radius:9px;padding:9px 10px;line-height:1.4}
+.tip b{color:var(--asphalt)}
+.pop .rz{font-size:12px;margin-top:6px;line-height:1.4}
+.pop .ok{color:#2f6b3f;font-weight:700}
+.pop .no{color:#b0322f;font-weight:700}
+.pop .exempt-note{margin-top:8px;padding:7px 8px;background:#f2f9f3;border:1px solid #bfe0c6;border-radius:7px;font-size:12px;color:#2f6b3f}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel" id="panel">
+  <button class="collapse-btn" id="collapseBtn" aria-label="Paneel in-/uitklappen">☰</button>
+  <div class="panel__head">
+    <p class="eyebrow">Bereikbaarheid · MVP</p>
+    <h1>Kan mijn vrachtwagen hier komen?</h1>
+    <p class="sub">Waar kan dit voertuig wel/niet komen in Amsterdam, op basis van de belemmeringsborden — met de 7,5t-zone er zichtbaar overheen.</p>
+  </div>
+  <div class="panel__body">
+
+    <div class="block">
+      <p class="label">Voertuigprofiel (dagelijks berekend)</p>
+      <div class="veh">
+        <label class="full">Type
+          <select id="v_type"><option value="truck" selected>Vrachtwagen</option><option value="bus">Bus</option><option value="tractor">Trekker</option><option value="light_commercial_vehicle">Bestelwagen</option></select>
+        </label>
+        <label>Hoogte (m)<input id="v_height" type="number" step="0.1" min="0" max="4" value="4.0"></label>
+        <label>Gewicht (t)<input id="v_weight" type="number" step="0.5" min="0" max="60" value="22.5"></label>
+        <label>Breedte (m)<input id="v_width" type="number" step="0.05" min="0" max="3" value="2.35"></label>
+        <label>Lengte (m)<input id="v_length" type="number" step="0.1" min="0" max="22" value="8.25"></label>
+        <label>Aslast (t)<input id="v_axle" type="number" step="0.5" min="0" max="12" value="10.5"></label>
+        <label>Aanhanger<select id="v_trailer"><option value="false" selected>Nee</option><option value="true">Ja</option></select></label>
+      </div>
+      <a class="btn ghost calc" id="calcBtn">Live herberekenen (experimenteel)</a>
+      <p class="hint">De getoonde laag is dagelijks voorberekend voor dit profiel (diesel Euro 6). Waarden aanpassen + live herberekenen werkt pas als de live-API is aangesloten. Geen kenteken of merk in deze kaart.</p>
+    </div>
+
+    <div class="block"><div class="status" id="status"><span class="spin"></span><span>Bereikbaarheid laden…</span></div></div>
+
+    <div class="block" id="legendBlock" style="display:none">
+      <p class="label">Legenda</p>
+      <div class="legend">
+        <div class="leg"><svg width="30" height="14"><line x1="2" y1="7" x2="28" y2="7" stroke="#CB1F27" stroke-width="4"/></svg><div><b>Niet bereikbaar</b> voor dit voertuig</div></div>
+        <div class="leg"><svg width="30" height="14"><line x1="2" y1="7" x2="28" y2="7" stroke="#2FA84E" stroke-width="4" opacity="0.7"/></svg><div><b>Wel bereikbaar</b></div></div>
+        <div class="leg"><svg width="34" height="34" viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="#fff" stroke="#9AA0A6" stroke-width="4"/><text x="20" y="24" text-anchor="middle" font-family="Barlow Semi Condensed" font-weight="700" font-size="11" fill="#6b6f76">7,5</text><rect x="26" y="1" width="15" height="11" rx="3" fill="#1C1E21"/><text x="33.5" y="9.5" text-anchor="middle" font-family="Space Mono" font-weight="700" font-size="7.5" fill="#fff">ZB</text></svg><div><b>7,5t-zone</b> — waar jouw ontheffing geldt</div></div>
+      </div>
+    </div>
+
+    <div class="block" id="tipBlock" style="display:none">
+      <div class="tip"><b>Tip:</b> klik ergens op de kaart om per punt te checken of je er komt — en zo nee, waarom. Als het alleen de 7,5t-zone is, zie je dat er expliciet bij. (Puntcheck werkt zodra de live-API is aangesloten.)</div>
+    </div>
+
+    <details class="about">
+      <summary>Over deze kaart (MVP)</summary>
+      <p>Bereikbaarheid via de NDW-bereikbaarheids-API (gemeente GM0363), dagelijks server-side voorberekend en hier ingeladen. Rood = niet bereikbaar voor het profiel; de 7,5t-zone (jouw ontheffing) ligt er als aparte laag overheen. Borden <b>met onderbord</b> (venstertijden, uitzonderingen) worden door de API genegeerd en tellen als bereikbaar; afslagverboden tellen niet mee.</p>
+      <p>MVP op één profiel. Volgende stappen: ontheffing-correctie op de gebiedslaag, live puntcheck via een tussenlaagje, en zelf voertuig kiezen.</p>
+      <p>Kaart © OSM © CARTO · NWB © RWS/PDOK · borden & bereikbaarheid © NDW.</p>
+    </details>
+  </div>
+</div>
+
+<script>
+"use strict";
+if(typeof L==="undefined"){var s=document.getElementById("status");if(s){s.className="status err";s.innerHTML="<span>Leaflet kon niet laden.</span>";}throw new Error("no leaflet");}
+
+const AMS=[52.372,4.900];
+const ACCESS_URL="https://data.ndw.nu/api/rest/static-road-data/accessibility-map/v2/accessibility.geojson";
+const SIGNS_URL="https://data.ndw.nu/api/rest/static-road-data/traffic-signs/v4/current-state?countyCode=GM0363&rvvCode=C21&crs=http%3A%2F%2Fwww.opengis.net%2Fdef%2Fcrs%2FOGC%2F1.3%2FCRS84";
+const ZONE_LABELS={ZB:"Zone begin",ZH:"Zone herhaling",ZE:"Zone einde",ZO:"Zone onbekend",NONE:"Geen zone"};
+
+const map=L.map("map",{zoomControl:true}).setView(AMS,13);
+map.zoomControl.setPosition("bottomright");
+const baseLight=L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{maxZoom:20,subdomains:"abcd",attribution:"© OSM © CARTO · NWB © RWS/PDOK · NDW"}).addTo(map);
+const baseOSM=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap-bijdragers"});
+const baseAerial=L.tileLayer.wms("https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0",{layers:"Actueel_orthoHR",format:"image/jpeg",version:"1.3.0",maxZoom:20,attribution:"Luchtfoto © PDOK"});
+const nwbWegvakken=L.tileLayer.wms("https://service.pdok.nl/rws/nwbwegen/wms/v1_0",{layers:"wegvakken",format:"image/png",transparent:true,version:"1.3.0",maxZoom:20});
+const accessLayer=L.layerGroup().addTo(map);
+const zoneLayer=L.layerGroup().addTo(map);
+L.control.layers(
+  {"Licht (CARTO)":baseLight,"OpenStreetMap":baseOSM,"Luchtfoto (PDOK)":baseAerial},
+  {"NWB wegvakken":nwbWegvakken,"7,5t-zoneborden":zoneLayer,"Bereikbaarheid":accessLayer},
+  {position:"topright",collapsed:false}
+).addTo(map);
+
+function parseWeight(blackCode){
+  if(blackCode==null) return null;
+  const m = String(blackCode).replace(",",".").match(/-?\d+(\.\d+)?/);
+  return m ? parseFloat(m[0]) : null;
+}
+function weightLabel(w, raw){
+  if(w==null) return (raw==null||raw==="")?"?":String(raw);
+  return (Number.isInteger(w)?w:String(w)).toString().replace(".",",");
+}
+function zoneCat(zoneCode, rvvCode){
+  let z = (zoneCode||"").trim().toUpperCase();
+  if(z==="ZB"||z==="ZH"||z==="ZE"||z==="ZO") return z;
+  // legacy encoding: rvvCode "C21(Zone)" implies a zone with unknown role
+  if(/\(zone\)/i.test(rvvCode||"")) return "ZO";
+  return "NONE";
+}
+function isC21(rvv){ return /^c21/i.test((rvv||"").trim()); }
+
+/* Normalize one raw record (from GeoJSON props or CSV row) into our shape */
+function normalize(rec){
+  const rvv = rec.rvvCode;
+  if(!isC21(rvv)) return null;
+  const lat = rec.latitude!=null ? +rec.latitude : (rec._lat!=null? +rec._lat : null);
+  const lon = rec.longitude!=null ? +rec.longitude : (rec._lon!=null? +rec._lon : null);
+  if(lat==null||lon==null||isNaN(lat)||isNaN(lon)) return null;
+  const w = parseWeight(rec.blackCode);
+  const zc = zoneCat(rec.zoneCode, rvv);
+  const isZone = zc!=="NONE";                          // enige zonecode -> toon badge
+  const knownZone = (zc==="ZB"||zc==="ZH"||zc==="ZE"); // herkende zone (begin/herhaling/einde)
+  const is75 = w!=null && Math.abs(w-7.5)<0.05;
+  const exempt = is75 && knownZone;                    // vrijstelling alleen bij herkende 7,5t-zone
+  // textSigns can be array (geojson) or string (csv)
+  let onder = "";
+  if(Array.isArray(rec.textSigns)) onder = rec.textSigns.map(t=>t&&(t.text||t.type)).filter(Boolean).join("; ");
+  else if(typeof rec.textSigns==="string") onder = rec.textSigns;
+  return {
+    id: (rec.id||rec.externalId||""),
+    lat, lon,
+    rvv, weight:w, wlabel:weightLabel(w, rec.blackCode),
+    zoneCode:zc, isZone, is75, exempt,
+    status:(rec.status||"").toUpperCase(),
+    road:rec.roadName||rec.townName||"",
+    onder,
+    img:rec.imageUrl||"",
+    to:rec.trafficOrderUrl||""
+  };
+}
+
+/* Extract raw records from a GeoJSON payload (array or FeatureCollection) */
+function fromGeoJSON(data){
+  let feats = Array.isArray(data) ? data : (data && data.features) ? data.features : [];
+  return feats.map(f=>{
+    const p = (f && f.properties) ? {...f.properties} : {...f};
+    if(f && f.geometry && Array.isArray(f.geometry.coordinates)){
+      p._lon = f.geometry.coordinates[0];
+      p._lat = f.geometry.coordinates[1];
+    }
+    return p;
+  });
+}
+
+/* Minimal robust CSV parser (delimiter auto-detect, quoted fields) */
+function parseCSV(text){
+  text = text.replace(/^\uFEFF/,"");
+  const firstLine = text.slice(0, text.indexOf("\n")>-1?text.indexOf("\n"):text.length);
+  const delim = (firstLine.split(";").length > firstLine.split(",").length) ? ";" : ",";
+  const rows=[]; let row=[], cell="", q=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(q){
+      if(ch==='"'){ if(text[i+1]==='"'){cell+='"';i++;} else q=false; }
+      else cell+=ch;
+    }else{
+      if(ch==='"') q=true;
+      else if(ch===delim){ row.push(cell); cell=""; }
+      else if(ch==="\n"){ row.push(cell); rows.push(row); row=[]; cell=""; }
+      else if(ch==="\r"){ /* skip */ }
+      else cell+=ch;
+    }
+  }
+  if(cell.length||row.length){ row.push(cell); rows.push(row); }
+  if(!rows.length) return [];
+  const head = rows[0].map(h=>h.trim());
+  return rows.slice(1).filter(r=>r.length>1).map(r=>{
+    const o={}; head.forEach((h,idx)=> o[h]= r[idx]!==undefined? r[idx].trim() : "");
+    return o;
+  });
+}
+
+/* ============================================================
+   Ingest
+   ============================================================ */
+
+const c21ById=new Map();
+function signGlyph(s){
+  const html=`<svg width="34" height="34" viewBox="0 0 40 40" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.3))">
+    <circle cx="20" cy="20" r="14" fill="#fff" stroke="#9AA0A6" stroke-width="4"/>
+    <text x="20" y="24" text-anchor="middle" font-family="Barlow Semi Condensed,sans-serif" font-weight="700" font-size="10" fill="#6b6f76">${s.wlabel}</text>
+    <rect x="26" y="1" width="15" height="11" rx="3" fill="#1C1E21"/>
+    <text x="33.5" y="9.6" text-anchor="middle" font-family="Space Mono,monospace" font-weight="700" font-size="7.5" fill="#fff">${s.zoneCode}</text></svg>`;
+  return L.divIcon({html,className:"",iconSize:[34,34],iconAnchor:[17,17]});
+}
+async function loadSigns(){
+  try{
+    const res=await fetch(SIGNS_URL,{headers:{"Accept":"application/geo+json"}});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const feats=fromGeoJSON(await res.json()).map(normalize).filter(Boolean);
+    zoneLayer.clearLayers();
+    feats.forEach(s=>{
+      const known=(s.zoneCode==="ZB"||s.zoneCode==="ZH"||s.zoneCode==="ZE");
+      if(s.id) c21ById.set(String(s.id),{zone:s.zoneCode,is75:s.is75,known:known,wlabel:s.wlabel});
+      if(s.is75 && known){
+        L.marker([s.lat,s.lon],{icon:signGlyph(s)})
+          .bindPopup('<div class="pop"><h3>C21 · '+s.wlabel+' t</h3><span class="ptag" style="background:#7d8288">7,5t-zone · '+(ZONE_LABELS[s.zoneCode]||s.zoneCode)+'</span></div>')
+          .addTo(zoneLayer);
+      }
+    });
+  }catch(e){}
+}
+
+function readVehicle(){
+  const num=id=>{const v=parseFloat(document.getElementById(id).value);return isNaN(v)?undefined:v;};
+  const o={type:document.getElementById("v_type").value,height:num("v_height"),weight:num("v_weight"),width:num("v_width"),length:num("v_length"),hasTrailer:document.getElementById("v_trailer").value==="true",emissionClass:"euro_6",fuelTypes:["diesel"]};
+  const a=num("v_axle"); if(a!==undefined) o.axleLoad=a;
+  return o;
+}
+function setStatus(kind,msg){const el=document.getElementById("status");el.className="status"+(kind?(" "+kind):"");el.innerHTML="<span>"+msg+"</span>";}
+function showBlocks(){["legendBlock","tipBlock"].forEach(id=>document.getElementById(id).style.display="");}
+
+function renderArea(data){
+  accessLayer.clearLayers();
+  const feats=(data.features||[]).filter(f=>f.properties&&f.properties.type==="roadSectionSegment");
+  let acc=0,inacc=0;
+  const gj=L.geoJSON({type:"FeatureCollection",features:feats},{
+    style:f=>{const ok=f.properties.accessible; if(ok)acc++;else inacc++; return {color:ok?"#2FA84E":"#CB1F27",weight:ok?2:3,opacity:ok?0.6:0.9};},
+    onEachFeature:(f,l)=>{ if(!f.properties.accessible) l.bindPopup('<div class="pop"><span class="no">Niet bereikbaar</span><div class="rz">Wegvak '+f.properties.roadSectionId+'. Klik op de kaart voor de reden.</div></div>'); }
+  });
+  accessLayer.addLayer(gj);
+  showBlocks();
+  return {acc,inacc};
+}
+
+/* primary: load daily precomputed file (same-origin, no CORS) */
+async function loadPrecomputed(){
+  try{
+    const res=await fetch("accessibility.geojson?v="+Date.now(),{cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const data=await res.json();
+    const c=renderArea(data);
+    setStatus("ok",c.inacc+" niet-bereikbare + "+c.acc+" bereikbare wegvak-richtingen — dagelijks bijgewerkt via NDW (22,5t / 4m / diesel Euro 6). Klik op de kaart voor een puntcheck.");
+  }catch(e){
+    showBlocks();
+    setStatus("err","Nog geen voorberekende data. Draai de Action één keer: Actions-tab → ‘Update accessibility data’ → Run workflow. Daarna verschijnt de laag vanzelf. ("+e.message+")");
+  }
+}
+
+/* experimental: live recompute (blocked by CORS until a proxy is added) */
+async function computeArea(){
+  setStatus("","Live herberekenen…");
+  const body={area:{type:"municipality",id:"GM0363"},vehicle:readVehicle(),includeAccessibleRoadSections:true,includeInaccessibleRoadSections:true};
+  try{
+    const res=await fetch(ACCESS_URL,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/geo+json"},body:JSON.stringify(body)});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const c=renderArea(await res.json());
+    setStatus("ok",c.inacc+" niet-bereikbaar + "+c.acc+" bereikbaar (live berekend).");
+  }catch(e){ setStatus("err","Live herberekenen lukt nog niet vanaf deze site (CORS op de POST). De getoonde laag komt uit de dagelijkse voorberekening en is actueel. ("+e.message+")"); }
+}
+
+let busy=false;
+async function checkPoint(latlng){
+  if(busy) return; busy=true;
+  const popup=L.popup().setLatLng(latlng).setContent('<div class="pop"><div class="rz">Checken…</div></div>').openOn(map);
+  const body={area:{type:"municipality",id:"GM0363"},destination:{latitude:latlng.lat,longitude:latlng.lng},vehicle:readVehicle(),includeAccessibleRoadSections:false,includeInaccessibleRoadSections:false};
+  try{
+    const res=await fetch(ACCESS_URL,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/geo+json"},body:JSON.stringify(body)});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const data=await res.json();
+    const dest=(data.features||[]).find(f=>f.properties&&f.properties.type==="destination");
+    popup.setContent(renderDest(dest));
+  }catch(e){ popup.setContent('<div class="pop"><div class="rz">Puntcheck werkt zodra de live-API is aangesloten (nu geblokkeerd door CORS). De rode/groene laag hierboven is wél actueel.</div></div>'); }
+  busy=false;
+}
+function renderDest(dest){
+  if(!dest) return '<div class="pop"><div class="rz">Geen bestemmingsinfo voor dit punt.</div></div>';
+  if(dest.properties.accessible) return '<div class="pop"><span class="ok">✓ Bereikbaar</span><div class="rz">Dit punt is bereikbaar voor dit voertuig.</div></div>';
+  const groups=dest.properties.reasons||[]; const signIds=[]; const types=new Set();
+  groups.forEach(g=>g.forEach(r=>{ if(r.type)types.add(r.type); (r.becauseOf||[]).forEach(b=>{ if(b.type==="trafficSign") signIds.push({id:String(b.trafficSignId||""),t:b.trafficSignType}); }); }));
+  const nonC21=signIds.filter(x=>!/^C21/i.test(x.t||""));
+  const allZone75 = signIds.length>0 && nonC21.length===0 && signIds.every(x=>{const m=c21ById.get(x.id);return m&&m.is75&&m.known;});
+  const labelMap={vehicleWeightRestriction:"gewicht",vehicleHeightRestriction:"hoogte",vehicleWidthRestriction:"breedte",vehicleLengthRestriction:"lengte",vehicleAxleWeightRestriction:"aslast",accessibleRestriction:"afgesloten",vehicleTypeRestriction:"voertuigtype",fuelTypeRestriction:"brandstof/milieuzone"};
+  const reasonTxt=[...types].map(t=>labelMap[t]||t).join(", ");
+  let html='<div class="pop"><span class="no">✗ Niet bereikbaar</span><div class="rz">Belemmering: '+(reasonTxt||"onbekend")+'.</div>';
+  if(allZone75) html+='<div class="exempt-note">Dit lijkt <b>alleen</b> de 7,5t-zone — met jouw ontheffing waarschijnlijk wél toegankelijk. (Controleer je ontheffingsvoorwaarden.)</div>';
+  return html+'</div>';
+}
+
+map.on("click",e=>checkPoint(e.latlng));
+document.getElementById("calcBtn").addEventListener("click",computeArea);
+document.getElementById("collapseBtn").addEventListener("click",()=>{document.getElementById("panel").classList.toggle("collapsed");setTimeout(()=>map.invalidateSize(),200);});
+
+loadSigns();
+loadPrecomputed();
+</script>
+</body>
+</html>
