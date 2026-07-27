@@ -242,7 +242,7 @@
         <label>Gewicht (t)<input id="v_weight" type="number" step="0.5" min="0" max="60" value="22.5"></label>
         <label>Breedte (m)<input id="v_width" type="number" step="0.05" min="0" max="3" value="2.35"></label>
         <label>Lengte (m)<input id="v_length" type="number" step="0.1" min="0" max="22" value="8.25"></label>
-        <label>Aslast (t)<input id="v_axle" type="number" step="0.5" min="0" max="12" value=""></label>
+        <label>Aslast (t)<input id="v_axle" type="number" step="0.5" min="0" max="12" value="10.5"></label>
         <label>Aanhanger<select id="v_trailer"><option value="false" selected>Nee</option><option value="true">Ja</option></select></label>
       </div>
       <a class="btn ghost calc" id="calcBtn">Live herberekenen (experimenteel)</a>
@@ -255,7 +255,7 @@
       <p class="label">Legenda</p>
       <div class="legend">
         <div class="leg"><svg width="30" height="14"><line x1="2" y1="7" x2="28" y2="7" stroke="#CB1F27" stroke-width="4"/></svg><div><b>Niet bereikbaar</b> voor dit voertuig</div></div>
-        <div class="leg"><svg width="30" height="14"><line x1="2" y1="7" x2="28" y2="7" stroke="#2E7D46" stroke-width="4" opacity="0.5"/></svg><div><b>Wel bereikbaar</b></div></div>
+        <div class="leg"><svg width="30" height="14"><line x1="2" y1="7" x2="28" y2="7" stroke="#2FA84E" stroke-width="4" opacity="0.7"/></svg><div><b>Wel bereikbaar</b></div></div>
         <div class="leg"><svg width="34" height="34" viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="#fff" stroke="#9AA0A6" stroke-width="4"/><text x="20" y="24" text-anchor="middle" font-family="Barlow Semi Condensed" font-weight="700" font-size="11" fill="#6b6f76">7,5</text><rect x="26" y="1" width="15" height="11" rx="3" fill="#1C1E21"/><text x="33.5" y="9.5" text-anchor="middle" font-family="Space Mono" font-weight="700" font-size="7.5" fill="#fff">ZB</text></svg><div><b>7,5t-zone</b> — waar jouw ontheffing geldt</div></div>
       </div>
     </div>
@@ -430,7 +430,7 @@ function renderArea(data){
   const feats=(data.features||[]).filter(f=>f.properties&&f.properties.type==="roadSectionSegment");
   let acc=0,inacc=0;
   const gj=L.geoJSON({type:"FeatureCollection",features:feats},{
-    style:f=>{const ok=f.properties.accessible; if(ok)acc++;else inacc++; return {color:ok?"#2E7D46":"#CB1F27",weight:ok?2:3.5,opacity:ok?0.35:0.9};},
+    style:f=>{const ok=f.properties.accessible; if(ok)acc++;else inacc++; return {color:ok?"#2FA84E":"#CB1F27",weight:ok?2:3,opacity:ok?0.6:0.9};},
     onEachFeature:(f,l)=>{ if(!f.properties.accessible) l.bindPopup('<div class="pop"><span class="no">Niet bereikbaar</span><div class="rz">Wegvak '+f.properties.roadSectionId+'. Klik op de kaart voor de reden.</div></div>'); }
   });
   accessLayer.addLayer(gj);
