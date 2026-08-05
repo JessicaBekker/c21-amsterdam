@@ -217,7 +217,7 @@
 .tip b{color:var(--asphalt)}
 .pop .rz{font-size:12px;margin-top:6px;line-height:1.4}
 .pop .ok{color:#2f6b3f;font-weight:700}
-.pop .no{color:#b0322f;font-weight:700}
+.pop .no{color:#d41159;font-weight:700}
 .pop .exempt-note{margin-top:8px;padding:7px 8px;background:#f2f9f3;border:1px solid #bfe0c6;border-radius:7px;font-size:12px;color:#2f6b3f}
 </style>
 </head>
@@ -255,8 +255,8 @@
     <div class="block" id="legendBlock" style="display:none">
       <p class="label">Legenda</p>
       <div class="legend">
-        <div class="leg"><svg width="30" height="14"><line x1="2" y1="7" x2="28" y2="7" stroke="#CB1F27" stroke-width="4"/></svg><div><b>Niet bereikbaar</b> voor dit voertuig</div></div>
-        <div class="leg"><svg width="30" height="14"><line x1="2" y1="7" x2="28" y2="7" stroke="#2FA84E" stroke-width="4" opacity="0.7"/></svg><div><b>Wel bereikbaar</b></div></div>
+        <div class="leg"><svg width="30" height="14"><line x1="2" y1="7" x2="28" y2="7" stroke="#d41159" stroke-width="4"/></svg><div><b>Niet bereikbaar</b> voor dit voertuig</div></div>
+        <div class="leg"><svg width="30" height="14"><line x1="2" y1="7" x2="28" y2="7" stroke="#8fc4ff" stroke-width="4" opacity="0.9"/></svg><div><b>Wel bereikbaar</b></div></div>
         <div class="leg"><svg width="34" height="34" viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="#fff" stroke="#9AA0A6" stroke-width="4"/><text x="20" y="24" text-anchor="middle" font-family="Barlow Semi Condensed" font-weight="700" font-size="11" fill="#6b6f76">7,5</text><rect x="26" y="1" width="15" height="11" rx="3" fill="#1C1E21"/><text x="33.5" y="9.5" text-anchor="middle" font-family="Space Mono" font-weight="700" font-size="7.5" fill="#fff">ZB</text></svg><div><b>7,5t-zone</b> — waar jouw ontheffing geldt</div></div>
       </div>
     </div>
@@ -407,7 +407,7 @@ async function loadSigns(){
     zoneLayer.clearLayers();
     feats.forEach(s=>{
       const known=(s.zoneCode==="ZB"||s.zoneCode==="ZH"||s.zoneCode==="ZE");
-      if(s.id) c21ById.set(String(s.id),{zone:s.zoneCode,is75:s.is75,known:known,wlabel:s.wlabel});
+      if(s.id) c21ById.set(String(s.id),{zone:s.zoneCode,is75:s.is75,known:known,wlabel:s.wlabel,road:s.road});
       if(s.is75 && known){
         L.marker([s.lat,s.lon],{icon:signGlyph(s)})
           .bindPopup('<div class="pop"><h3>C21 · '+s.wlabel+' t</h3><span class="ptag" style="background:#7d8288">7,5t-zone · '+(ZONE_LABELS[s.zoneCode]||s.zoneCode)+'</span></div>')
@@ -431,7 +431,7 @@ function renderArea(data){
   const feats=(data.features||[]).filter(f=>f.properties&&f.properties.type==="roadSectionSegment");
   let acc=0,inacc=0;
   const gj=L.geoJSON({type:"FeatureCollection",features:feats},{
-    style:f=>{const ok=f.properties.accessible; if(ok)acc++;else inacc++; return {color:ok?"#2FA84E":"#CB1F27",weight:ok?2:3,opacity:ok?0.6:0.9};},
+    style:f=>{const ok=f.properties.accessible; if(ok)acc++;else inacc++; return {color:ok?"#8fc4ff":"#d41159",weight:ok?2:3,opacity:ok?0.6:0.95};},
     onEachFeature:(f,l)=>{ if(!f.properties.accessible) l.bindPopup('<div class="pop"><span class="no">Niet bereikbaar</span><div class="rz">Wegvak '+f.properties.roadSectionId+'. Klik op de kaart voor de reden.</div></div>'); }
   });
   accessLayer.addLayer(gj);
@@ -486,10 +486,14 @@ function renderDest(dest){
   groups.forEach(g=>g.forEach(r=>{ if(r.type)types.add(r.type); (r.becauseOf||[]).forEach(b=>{ if(b.type==="trafficSign") signIds.push({id:String(b.trafficSignId||""),t:b.trafficSignType}); }); }));
   const nonC21=signIds.filter(x=>!/^C21/i.test(x.t||""));
   const allZone75 = signIds.length>0 && nonC21.length===0 && signIds.every(x=>{const m=c21ById.get(x.id);return m&&m.is75&&m.known;});
-  const labelMap={vehicleWeightRestriction:"gewicht",vehicleHeightRestriction:"hoogte",vehicleWidthRestriction:"breedte",vehicleLengthRestriction:"lengte",vehicleAxleWeightRestriction:"aslast",accessibleRestriction:"afgesloten",vehicleTypeRestriction:"voertuigtype",fuelTypeRestriction:"brandstof/milieuzone"};
+  const labelMap={vehicleLengthReason:"Voertuiglengte",vehicleHeightReason:"Voertuighoogte",vehicleWidthReason:"Voertuigbreedte",vehicleAxleWeightReason:"Asgewicht",vehicleWeightReason:"Voertuiggewicht",fuelTypeReason:"Brandstoftype",vehicleTypeReason:"Voertuigtype",accessibleReason:"Toegankelijkheid",unknown:"Onbekend"};
   const reasonTxt=[...types].map(t=>labelMap[t]||t).join(", ");
   let html='<div class="pop"><span class="no">✗ Niet bereikbaar</span><div class="rz">Belemmering: '+(reasonTxt||"onbekend")+'.</div>';
-  if(allZone75) html+='<div class="exempt-note">Dit lijkt <b>alleen</b> de 7,5t-zone — met jouw ontheffing waarschijnlijk wél toegankelijk. (Controleer je ontheffingsvoorwaarden.)</div>';
+  if(allZone75){
+    const zoneRoads=[...new Set(signIds.map(x=>{const m=c21ById.get(x.id);return m&&m.road;}).filter(Boolean))];
+    const waar=zoneRoads.length?' (bord bij: '+zoneRoads.join(', ')+')':'';
+    html+='<div class="exempt-note">Dit lijkt <b>alleen</b> de 7,5t-zone'+waar+' — met jouw ontheffing waarschijnlijk wél toegankelijk. (Controleer je ontheffingsvoorwaarden.)</div>';
+  }
   return html+'</div>';
 }
 
