@@ -227,7 +227,7 @@
   <button class="collapse-btn" id="collapseBtn" aria-label="Paneel in-/uitklappen">☰</button>
   <div class="panel__head">
     <p class="eyebrow">Bereikbaarheid · MVP</p>
-    <h1>Kan mijn vrachtwagen hier komen?</h1>
+    <h1>Waar kan mijn vrachtwagen komen?</h1>
     <p class="sub">Waar kan dit voertuig wel/niet komen in Amsterdam, op basis van de belemmeringsborden — met de 7,5t-zone er zichtbaar overheen. Geen route-advies.</p>
     <a href="index.html" style="display:inline-flex;align-items:center;gap:6px;margin-top:11px;padding:7px 12px;border:1px solid var(--asphalt);border-radius:8px;background:#fff;color:var(--asphalt);text-decoration:none;font-size:12.5px;font-weight:600;font-family:Barlow,sans-serif">&larr; Overzicht gewichtsborden in Amsterdam</a>
   </div>
@@ -246,8 +246,8 @@
         <label>Aslast (t)<input id="v_axle" type="number" step="0.5" min="0" max="12" value="10.5"></label>
         <label>Aanhanger<select id="v_trailer"><option value="false" selected>Nee</option><option value="true">Ja</option></select></label>
       </div>
-      <a class="btn ghost calc" id="calcBtn">Live herberekenen (experimenteel)</a>
-      <p class="hint">De getoonde laag is dagelijks voorberekend voor dit profiel (diesel Euro 6). Waarden aanpassen + live herberekenen werkt pas als de live-API is aangesloten. Geen kenteken of merk in deze kaart.</p>
+      <a class="btn ghost calc" id="calcBtn">Herbereken voor dit voertuig</a>
+      <p class="hint">De kaart opent met de dagelijks voorberekende laag (diesel Euro 6). Pas de waarden aan en klik hierboven om live te herberekenen voor jouw voertuig. Geen kenteken of merk in deze kaart.</p>
     </div>
 
     <div class="block"><div class="status" id="status"><span class="spin"></span><span>Bereikbaarheid laden…</span></div></div>
@@ -262,7 +262,7 @@
     </div>
 
     <div class="block" id="tipBlock" style="display:none">
-      <div class="tip"><b>Tip:</b> klik ergens op de kaart om per punt te checken of je er komt — en zo nee, waarom. Als het alleen de 7,5t-zone is, zie je dat er expliciet bij. (Puntcheck werkt zodra de live-API is aangesloten.)</div>
+      <div class="tip"><b>Tip:</b> klik ergens op de kaart om per punt te checken of je er komt — en zo nee, waarom. Als het alleen de 7,5t-zone is, zie je dat er expliciet bij.</div>
     </div>
 
     <details class="about">
@@ -279,7 +279,7 @@
 if(typeof L==="undefined"){var s=document.getElementById("status");if(s){s.className="status err";s.innerHTML="<span>Leaflet kon niet laden.</span>";}throw new Error("no leaflet");}
 
 const AMS=[52.372,4.900];
-const ACCESS_URL="https://data.ndw.nu/api/rest/static-road-data/accessibility-map/v2/accessibility.geojson";
+const ACCESS_URL="https://ndw-proxy.jess-gearbox-cloudflare.workers.dev";
 const SIGNS_URL="https://data.ndw.nu/api/rest/static-road-data/traffic-signs/v4/current-state?countyCode=GM0363&rvvCode=C21&crs=http%3A%2F%2Fwww.opengis.net%2Fdef%2Fcrs%2FOGC%2F1.3%2FCRS84";
 const ZONE_LABELS={ZB:"Zone begin",ZH:"Zone herhaling",ZE:"Zone einde",ZO:"Zone onbekend",NONE:"Geen zone"};
 
@@ -462,7 +462,7 @@ async function computeArea(){
     if(!res.ok) throw new Error("HTTP "+res.status);
     const c=renderArea(await res.json());
     setStatus("ok",c.inacc+" niet-bereikbaar + "+c.acc+" bereikbaar (live berekend).");
-  }catch(e){ setStatus("err","Live herberekenen lukt nog niet vanaf deze site (CORS op de POST). De getoonde laag komt uit de dagelijkse voorberekening en is actueel. ("+e.message+")"); }
+  }catch(e){ setStatus("err","Herberekenen lukt nu even niet — probeer het zo nog eens. De getoonde laag is de dagelijkse voorberekening en blijft actueel. ("+e.message+")"); }
 }
 
 let busy=false;
@@ -476,7 +476,7 @@ async function checkPoint(latlng){
     const data=await res.json();
     const dest=(data.features||[]).find(f=>f.properties&&f.properties.type==="destination");
     popup.setContent(renderDest(dest));
-  }catch(e){ popup.setContent('<div class="pop"><div class="rz">Puntcheck werkt zodra de live-API is aangesloten (nu geblokkeerd door CORS). De rode/groene laag hierboven is wél actueel.</div></div>'); }
+  }catch(e){ popup.setContent('<div class="pop"><div class="rz">Check lukt nu even niet, probeer opnieuw. ('+e.message+')</div></div>'); }
   busy=false;
 }
 function renderDest(dest){
