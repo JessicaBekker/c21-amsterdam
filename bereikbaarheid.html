@@ -228,7 +228,7 @@
   <div class="panel__head">
     <p class="eyebrow">Bereikbaarheid · MVP</p>
     <h1>Waar kan mijn vrachtwagen komen?</h1>
-    <p class="sub">Waar kan dit voertuig wel/niet komen in Amsterdam, op basis van de belemmeringsborden — met de 7,5t-zone er zichtbaar overheen. Geen route-advies.</p>
+    <p class="sub">Waar kan dit voertuig wel/niet komen in Amsterdam, op basis van toegangsbeperkingen — met de 7,5t-zone er zichtbaar overheen. Geen route-advies.</p>
     <a href="index.html" style="display:inline-flex;align-items:center;gap:6px;margin-top:11px;padding:7px 12px;border:1px solid var(--asphalt);border-radius:8px;background:#fff;color:var(--asphalt);text-decoration:none;font-size:12.5px;font-weight:600;font-family:Barlow,sans-serif">&larr; Overzicht gewichtsborden in Amsterdam</a>
   </div>
   <div class="panel__body">
@@ -488,7 +488,7 @@ function renderDest(dest){
   const allZone75 = signIds.length>0 && nonC21.length===0 && signIds.every(x=>{const m=c21ById.get(x.id);return m&&m.is75&&m.known;});
   const labelMap={vehicleLengthReason:"Voertuiglengte",vehicleHeightReason:"Voertuighoogte",vehicleWidthReason:"Voertuigbreedte",vehicleAxleWeightReason:"Asgewicht",vehicleWeightReason:"Voertuiggewicht",fuelTypeReason:"Brandstoftype",vehicleTypeReason:"Voertuigtype",accessibleReason:"Toegankelijkheid",unknown:"Onbekend"};
   const reasonTxt=[...types].map(t=>labelMap[t]||t).join(", ");
-  let html='<div class="pop"><span class="no">✗ Niet bereikbaar</span><div class="rz">Belemmering: '+(reasonTxt||"onbekend")+'.</div>';
+  let html='<div class="pop"><span class="no">✗ Niet bereikbaar</span><div class="rz">Beperking: '+(reasonTxt||"onbekend")+'.</div>';
   if(allZone75){
     const zoneRoads=[...new Set(signIds.map(x=>{const m=c21ById.get(x.id);return m&&m.road;}).filter(Boolean))];
     const waar=zoneRoads.length?' (bord bij: '+zoneRoads.join(', ')+')':'';
